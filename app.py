@@ -15,14 +15,10 @@ app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)
 
 # ==================== AYARLAR ====================
-# Admin şifresini mutlaka değiştir!
-ADMIN_PASSWORD = "Kyrasstore102"
+ADMIN_PASSWORD = "pes2026admin"   # BUNU DEĞİŞTİR!
 
-# Gmail IMAP
 IMAP_SERVER = "imap.gmail.com"
 IMAP_PORT = 993
-
-# Kod ararken son kaç dakikalık maillere bakılsın
 CODE_SEARCH_MINUTES = 30
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "database.db")
@@ -41,7 +37,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             code TEXT UNIQUE NOT NULL,
             email TEXT NOT NULL,
-            password TEXT NOT NULL,
+            gmail_password TEXT NOT NULL,
+            account_password TEXT NOT NULL,
             current_code TEXT DEFAULT '',
             note TEXT DEFAULT '',
             created_at TEXT,
@@ -83,17 +80,15 @@ def decode_mime_header(value):
 
 
 def extract_code_from_text(text):
-    """Mail içeriğinden doğrulama kodu çıkarmaya çalışır."""
     if not text:
         return None
 
-    # Önce en yaygın kalıpları dene
     patterns = [
         r"(?:code|kod|verification|doğrulama|otp|pin)[\s:]*[is]*[\s:]*(\d{4,8})",
         r"(?:your code is|kodunuz|doğrulama kodu)[\s:]*(\d{4,8})",
-        r"\b(\d{6})\b",          # 6 haneli kod (en yaygın)
-        r"\b(\d{4})\b",          # 4 haneli
-        r"\b(\d{8})\b",          # 8 haneli
+        r"\b(\d{6})\b",
+        r"\b(\d{4})\b",
+        r"\b(\d{8})\b",
     ]
 
     text_lower = text.lower()
@@ -101,34 +96,26 @@ def extract_code_from_text(text):
         match = re.search(pattern, text_lower, re.IGNORECASE)
         if match:
             return match.group(1)
-
     return None
 
 
-def fetch_latest_code_from_gmail(email_addr, password):
-    """
-    Gmail'e bağlanır, son mailleri tarar ve doğrulama kodu bulmaya çalışır.
-    Başarılıysa (kod, None) döner, hata varsa (None, hata_mesajı) döner.
-    """
+def fetch_latest_code_from_gmail(email_addr, gmail_password):
     try:
         context = ssl.create_default_context()
         mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, ssl_context=context)
-        mail.login(email_addr, password)
+        mail.login(email_addr, gmail_password)
         mail.select("INBOX")
 
-        # Son X dakikadaki mailleri al
         since_date = (datetime.utcnow() - timedelta(minutes=CODE_SEARCH_MINUTES)).strftime("%d-%b-%Y")
         status, messages = mail.search(None, f'(SINCE "{since_date}")')
 
         if status != "OK" or not messages[0]:
-            # Hiç mail yoksa tüm son 20 maili dene
             status, messages = mail.search(None, "ALL")
             if status != "OK" or not messages[0]:
                 mail.logout()
                 return None, "Mail kutusunda hiç mesaj yok"
 
         mail_ids = messages[0].split()
-        # En yeniden eskiye doğru bak (son 15 mail yeterli)
         mail_ids = mail_ids[-15:][::-1]
 
         found_code = None
@@ -143,7 +130,6 @@ def fetch_latest_code_from_gmail(email_addr, password):
             subject = decode_mime_header(msg.get("Subject", ""))
             from_ = decode_mime_header(msg.get("From", ""))
 
-            # Body'yi çıkar
             body = ""
             if msg.is_multipart():
                 for part in msg.walk():
@@ -165,12 +151,11 @@ def fetch_latest_code_from_gmail(email_addr, password):
                 except Exception:
                     body = str(msg.get_payload())
 
-            # Konu + body içinde kod ara
             full_text = subject + "\n" + body + "\n" + from_
             code = extract_code_from_text(full_text)
             if code:
                 found_code = code
-                break  # En yeni bulunanı al
+                break
 
         mail.logout()
 
@@ -181,7 +166,7 @@ def fetch_latest_code_from_gmail(email_addr, password):
     except imaplib.IMAP4.error as e:
         err = str(e).lower()
         if "authentication failed" in err or "invalid credentials" in err:
-            return None, "Mail girişi başarısız. Şifre yanlış veya Gmail App Password gerekiyor."
+            return None, "Gmail girişi başarısız. Gmail şifresi yanlış veya App Password gerekiyor."
         return None, f"IMAP hatası: {str(e)[:80]}"
     except Exception as e:
         return None, f"Bağlantı hatası: {str(e)[:80]}"
@@ -211,7 +196,7 @@ def check_code():
         "delivery.html",
         delivery_code=row["code"],
         email=row["email"],
-        password=row["password"],
+        password=row["account_password"],
         note=row["note"] or "",
     )
 
@@ -221,7 +206,7 @@ def api_get_code(delivery_code):
     delivery_code = delivery_code.strip().upper()
     conn = get_db()
     row = conn.execute(
-        "SELECT email, password, current_code FROM deliveries WHERE code = ?",
+        "SELECT email, gmail_password, current_code FROM deliveries WHERE code = ?",
         (delivery_code,),
     ).fetchone()
     conn.close()
@@ -229,7 +214,6 @@ def api_get_code(delivery_code):
     if not row:
         return jsonify({"ok": False, "code": "", "message": "Teslimat bulunamadı"})
 
-    # 1) Önce elle girilmiş kod varsa onu ver (manuel override)
     if row["current_code"] and row["current_code"].strip():
         return jsonify({
             "ok": True,
@@ -238,8 +222,7 @@ def api_get_code(delivery_code):
             "source": "manual"
         })
 
-    # 2) Otomatik Gmail'den çek
-    code, error = fetch_latest_code_from_gmail(row["email"], row["password"])
+    code, error = fetch_latest_code_from_gmail(row["email"], row["gmail_password"])
 
     if code:
         return jsonify({
@@ -293,11 +276,12 @@ def admin_panel():
 @login_required
 def admin_add():
     email = request.form.get("email", "").strip()
-    password = request.form.get("password", "").strip()
+    gmail_password = request.form.get("gmail_password", "").strip()
+    account_password = request.form.get("account_password", "").strip()
     note = request.form.get("note", "").strip()
     custom_code = request.form.get("custom_code", "").strip().upper()
 
-    if not email or not password:
+    if not email or not gmail_password or not account_password:
         return redirect(url_for("admin_panel"))
 
     code = custom_code if custom_code else generate_code()
@@ -306,15 +290,19 @@ def admin_add():
     conn = get_db()
     try:
         conn.execute(
-            "INSERT INTO deliveries (code, email, password, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (code, email, password, note, now, now),
+            """INSERT INTO deliveries 
+               (code, email, gmail_password, account_password, note, created_at, updated_at) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (code, email, gmail_password, account_password, note, now, now),
         )
         conn.commit()
     except sqlite3.IntegrityError:
         code = generate_code()
         conn.execute(
-            "INSERT INTO deliveries (code, email, password, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (code, email, password, note, now, now),
+            """INSERT INTO deliveries 
+               (code, email, gmail_password, account_password, note, created_at, updated_at) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (code, email, gmail_password, account_password, note, now, now),
         )
         conn.commit()
     conn.close()
@@ -324,7 +312,6 @@ def admin_add():
 @app.route("/admin/update_code", methods=["POST"])
 @login_required
 def admin_update_code():
-    """Manuel kod girişi (yedek)."""
     delivery_id = request.form.get("id")
     new_code = request.form.get("current_code", "").strip()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
