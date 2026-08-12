@@ -55,7 +55,7 @@
             outline: none;
         }
         input:focus, textarea:focus { border-color: #6c5ce7; }
-        input[type="text"], input[type="email"] { flex: 1; min-width: 140px; }
+        input[type="text"], input[type="email"], input[type="password"] { flex: 1; min-width: 140px; }
         textarea { width: 100%; min-height: 60px; resize: vertical; }
         .btn {
             padding: 11px 18px;
@@ -100,6 +100,11 @@
         }
         .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .empty { text-align: center; color: #666; padding: 30px; }
+        .hint {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 8px;
+        }
         @media (max-width: 700px) {
             table, thead, tbody, th, td, tr { display: block; }
             thead { display: none; }
@@ -129,16 +134,22 @@
         <a href="/admin/logout" class="logout">Çıkış Yap</a>
     </div>
 
-    <!-- Yeni hesap ekle -->
     <div class="section">
         <h2>➕ Yeni Hesap Ekle</h2>
         <form method="POST" action="/admin/add">
             <div class="form-row">
-                <input type="email" name="email" placeholder="E-posta (mail)" required>
-                <input type="text" name="password" placeholder="Şifre" required>
+                <input type="email" name="email" placeholder="Gmail adresi" required>
+            </div>
+            <div class="hint">Gmail Şifresi = Mailin kendi şifresi (veya App Password). Kod çekmek için kullanılır, alıcı görmez.</div>
+            <div class="form-row">
+                <input type="text" name="gmail_password" placeholder="Gmail Şifresi / App Password" required>
+            </div>
+            <div class="hint">Hesap Şifresi = Oyuna giriş şifresi. Alıcı bunu görür.</div>
+            <div class="form-row">
+                <input type="text" name="account_password" placeholder="Oyun / Hesap Şifresi" required>
             </div>
             <div class="form-row">
-                <input type="text" name="custom_code" placeholder="Özel kod (boş bırakırsan otomatik)">
+                <input type="text" name="custom_code" placeholder="Özel teslimat kodu (boş bırakırsan otomatik)">
             </div>
             <div class="form-row">
                 <textarea name="note" placeholder="Not (isteğe bağlı, alıcıya görünür)"></textarea>
@@ -147,7 +158,6 @@
         </form>
     </div>
 
-    <!-- Mevcut hesaplar -->
     <div class="section">
         <h2>📋 Aktif Teslimatlar ({{ deliveries|length }})</h2>
 
@@ -157,7 +167,7 @@
                 <tr>
                     <th>Teslimat Kodu</th>
                     <th>Mail</th>
-                    <th>Şifre</th>
+                    <th>Hesap Şifresi</th>
                     <th>Mevcut Kod</th>
                     <th>İşlem</th>
                 </tr>
@@ -169,13 +179,13 @@
                         <span class="code-badge">{{ d.code }}</span>
                     </td>
                     <td data-label="Mail">{{ d.email }}</td>
-                    <td data-label="Şifre">{{ d.password }}</td>
+                    <td data-label="Hesap Şifresi">{{ d.account_password }}</td>
                     <td data-label="Mevcut Kod">
                         <form method="POST" action="/admin/update_code" class="actions">
                             <input type="hidden" name="id" value="{{ d.id }}">
                             <input type="text" name="current_code" class="code-input"
                                    value="{{ d.current_code or '' }}"
-                                   placeholder="Kodu yaz...">
+                                   placeholder="Manuel kod...">
                             <button type="submit" class="btn btn-green">Kaydet</button>
                         </form>
                     </td>
