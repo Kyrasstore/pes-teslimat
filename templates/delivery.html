@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hesap Bilgileri</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            padding: 20px;
+        }
+        .card {
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            padding: 36px 28px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+        }
+        h1 {
+            text-align: center;
+            font-size: 1.45rem;
+            margin-bottom: 24px;
+        }
+        .info-box {
+            background: rgba(0,0,0,0.25);
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+        .info-row {
+            margin-bottom: 14px;
+        }
+        .info-row:last-child { margin-bottom: 0; }
+        .label {
+            font-size: 0.8rem;
+            color: #aaa;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            word-break: break-all;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .copy-btn {
+            background: rgba(108,92,231,0.3);
+            border: 1px solid rgba(108,92,231,0.5);
+            color: #c5b8ff;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .copy-btn:hover { background: rgba(108,92,231,0.5); }
+        .note {
+            background: rgba(255,193,7,0.1);
+            border: 1px solid rgba(255,193,7,0.3);
+            color: #ffe082;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+        .code-section {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.12);
+        }
+        .code-section h2 {
+            font-size: 1.1rem;
+            margin-bottom: 12px;
+            text-align: center;
+        }
+        #codeDisplay {
+            background: rgba(0,0,0,0.35);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            min-height: 70px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+        }
+        #codeValue {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: #a29bfe;
+        }
+        #codeMsg {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin-top: 6px;
+        }
+        .btn-request {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #00b894, #00cec9);
+            color: #fff;
+            font-size: 1.05rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, opacity 0.15s;
+        }
+        .btn-request:hover { transform: translateY(-2px); opacity: 0.95; }
+        .btn-request:disabled {
+            opacity: 0.6;
+            cursor: wait;
+            transform: none;
+        }
+        .back {
+            display: block;
+            text-align: center;
+            margin-top: 22px;
+            color: #aaa;
+            font-size: 0.9rem;
+            text-decoration: none;
+        }
+        .back:hover { color: #fff; }
+        .spinner {
+            display: none;
+            width: 22px;
+            height: 22px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: 0 auto 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>✅ Hesap Bilgileri</h1>
+
+        <div class="info-box">
+            <div class="info-row">
+                <div class="label">E-posta / Mail</div>
+                <div class="value">
+                    <span id="emailVal">{{ email }}</span>
+                    <button class="copy-btn" onclick="copyText('emailVal')">Kopyala</button>
+                </div>
+            </div>
+            <div class="info-row">
+                <div class="label">Şifre</div>
+                <div class="value">
+                    <span id="passVal">{{ password }}</span>
+                    <button class="copy-btn" onclick="copyText('passVal')">Kopyala</button>
+                </div>
+            </div>
+        </div>
+
+        {% if note %}
+        <div class="note">📝 {{ note }}</div>
+        {% endif %}
+
+        <div class="code-section">
+            <h2>📩 Doğrulama Kodu</h2>
+            <div id="codeDisplay">
+                <div class="spinner" id="spinner"></div>
+                <div id="codeValue">—</div>
+                <div id="codeMsg">Kod istemek için butona basın<br><small style="opacity:0.7">Gmail'den otomatik çekilir</small></div>
+            </div>
+            <button class="btn-request" id="btnRequest" onclick="requestCode()">Kod İste</button>
+        </div>
+
+        <a href="/" class="back">← Yeni kod gir</a>
+    </div>
+
+    <script>
+        const deliveryCode = "{{ delivery_code }}";
+
+        function copyText(id) {
+            const text = document.getElementById(id).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Kopyalandı: " + text);
+            }).catch(() => {
+                // Fallback
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+                alert("Kopyalandı: " + text);
+            });
+        }
+
+        async function requestCode() {
+            const btn = document.getElementById("btnRequest");
+            const spinner = document.getElementById("spinner");
+            const codeValue = document.getElementById("codeValue");
+            const codeMsg = document.getElementById("codeMsg");
+
+            btn.disabled = true;
+            spinner.style.display = "block";
+            codeValue.textContent = "";
+            codeMsg.textContent = "Kod aranıyor...";
+
+            try {
+                const res = await fetch("/api/get_code/" + encodeURIComponent(deliveryCode));
+                const data = await res.json();
+
+                if (data.code) {
+                    codeValue.textContent = data.code;
+                    codeMsg.innerHTML = "Kod hazır ✓ <small>(" + (data.source || "") + ")</small>";
+                } else {
+                    codeValue.textContent = "—";
+                    codeMsg.textContent = data.message || "Henüz kod yok";
+                }
+            } catch (e) {
+                codeValue.textContent = "—";
+                codeMsg.textContent = "Bağlantı hatası, tekrar deneyin";
+            }
+
+            spinner.style.display = "none";
+            btn.disabled = false;
+        }
+
+        // Otomatik her 8 saniyede bir kontrol (isteğe bağlı)
+        // setInterval(requestCode, 8000);
+    </script>
+</body>
+</html>
